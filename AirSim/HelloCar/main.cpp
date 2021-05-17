@@ -6,7 +6,7 @@ STRICT_MODE_OFF
 #include "rpc/rpc_error.h"
 STRICT_MODE_ON
 #include <stdlib.h>
-
+#include "verificar_mapa.h"
 #include "vehicles/car/api/CarRpcLibClient.hpp"
 #include "common/common_utils/FileSystem.hpp"
 #include <iostream>
@@ -75,6 +75,10 @@ int main()
 	try {
 		client.confirmConnection();
 		client.reset();
+		if (option == 1) {
+			map = loadmap("mapa2.pbm");
+
+		}
 
 		if (option >= 2) {
 			checkpoints.LoadWaypoints("Trajetoria.txt");
@@ -82,15 +86,14 @@ int main()
 		}
 		if (option == 3)
 		{
-			map = new segment::image<unsigned char>(300, 300, false);
-			map->init(1);
+			map = newmap("mapa.pbm");
 		}
 
 		msr::airlib::Pose car_pose_previous;
 		car_pose_previous.position[0] = 0;
 		car_pose_previous.position[1] = 0;
 		msr::airlib::Pose car_pose_current;
-
+		
 		do {
 			auto car_state = client.getCarState();
 			auto car_speed = car_state.speed;
@@ -99,8 +102,16 @@ int main()
 			if (option == 1) {
 				if (add(car_pose_previous, car_pose_current, 3.0)) {
 					trajectory.AddWaypoints(car_pose_current.position[0], car_pose_current.position[1], car_speed);
-					car_pose_previous = car_pose_current;				
+					car_pose_previous = car_pose_current;
+
+					int x = (int)car_pose_current.position[0];
+					int y = (int)car_pose_current.position[1];
+					
+					if (offroad(map, x, y)) {
+						std::cout << "O Carro esta fora da pista" << std::endl;
+					}
 				}
+				
 			}
 			if (option >= 2) {
 				Vector3r pose(car_pose_current.position[0], car_pose_current.position[1], VectorMath::yawFromQuaternion(car_pose_current.orientation));
@@ -108,16 +119,18 @@ int main()
 				float steering = lateral_control.Update(checkpoints, pose, car_speed);
 				float acceleration = velocity_control.Update(car_speed, desired_velocity);
 				drive(client, acceleration, steering);
+
+				int x = (int)car_pose_current.position[0];
+				int y = (int)car_pose_current.position[1];
+				
 			}
 			if (option == 3)
 			{
 				int x = (int)car_pose_current.position[0];
 				int y = (int)car_pose_current.position[1];
-				map->access[150+x][150+y] = 0; //Translada as coordenadas para garantir que os indices sejam sempre positivos
-				
-				// TODO : mapear a pista colocando 0 em toda sua extensao em nao somente na trajetoria do carro como foi feito acima
+				savemap(map,x ,y);
 			}
-
+		
 		} while (!finish(car_pose_current));
 
 		if (option == 1)
@@ -136,5 +149,5 @@ int main()
 		std::cout << "Verifique os erros enviados pela API do AirSim." << std::endl << msg << std::endl; std::cin.get();
 	}
 	
-	return 0;
+	return 0;  
 }
